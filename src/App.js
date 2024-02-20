@@ -163,6 +163,13 @@ function App() {
               status="badgeom"
               featureType={featureType}
             />
+            <UnderpassValidationStats
+              tags={tags}
+              hashtag={hashtag}
+              apiUrl={config.API_URL}
+              status="badvalue"
+              featureType={featureType}
+            />
           </div>
           <div className="border-b-2 py-5 mb-4">
             <form className="space-x-2">
