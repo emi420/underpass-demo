@@ -3,14 +3,14 @@ import {
   UnderpassFeatureList,
   UnderpassMap,
   HOTTheme,
-  UnderpassFeatureStats,
-  UnderpassValidationStats,
+  UnderpassFeatureStats
 } from "@hotosm/underpass-ui";
-import { center } from "./center";
-import "./App.css";
+import { center, API_URL, AOI_GEOJSON } from "./config";
+import AOIUpload from "./components/AOIUpload";
+import "./index.css";
 
 const config = {
-  API_URL: "https://underpass.live:8000",
+  API_URL,
 };
 
 const statusList = {
@@ -20,6 +20,10 @@ const statusList = {
   BADVALUE: "badvalue",
 };
 
+const getCoodinatesFromGeoJSON = (geoJSON) => (
+  geoJSON.features[0].geometry.coordinates[0].map(x => x.join(" ")).join(",")
+)
+
 function App() {
   const [coords, setCoords] = useState(center);
   const [activeFeature, setActiveFeature] = useState(null);
@@ -28,9 +32,13 @@ function App() {
   const [mapSource, setMapSource] = useState("osm");
   const [realtimeList, setRealtimeList] = useState(false);
   const [realtimeMap, setRealtimeMap] = useState(false);
-  const [status, setStatus] = useState(statusList.UNSQUARED);
-  const [featureType, setFeatureType] = useState("polygon");
-  const [area, setArea] = useState(null);
+  const [status, setStatus] = useState(statusList.ALL);
+  const [featureType, setFeatureType] = useState("polygons");
+  const [mapBbox, setMapBbox] = useState(null);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const [aoiGeoJson, setAoiGeoJson] = useState(AOI_GEOJSON);
+  const [aoi, setAoi] = useState(null);
+  const [fileName, setFileName] = useState(null);
   const tagsInputRef = useRef("");
   const hashtagInputRef = useRef("");
   const styleSelectRef = useRef();
@@ -44,6 +52,12 @@ function App() {
       document.body.style.backgroundColor = `rgb(${hottheme.colors.white})`;
     }
   }, [mapSource]);
+
+  useEffect(() => {
+    if (!tags.startsWith("building")) {
+      setStatus(statusList.ALL)
+    }
+  }, [tags, status]);
 
   const defaultMapStyle = {
     waysLine: {
@@ -71,25 +85,39 @@ function App() {
     return false;
   };
 
+  const handleResetFileClick = () => {
+    setFileName(null);
+    setAoiGeoJson(AOI_GEOJSON);
+    setAoi(null);
+  }
+
   const handleMapSourceSelect = (e) => {
     setMapSource(e.target.options[e.target.selectedIndex].value);
   };
 
-  const handleMapMove = ({ bbox }) => {
-    setArea(bbox);
-  };
-  const handleMapLoad = ({ bbox }) => {
-    setArea(bbox);
-  };
+  const handleMapMove = (data) => {
+    setMapBbox(data.bbox);
+  }
+
+  const handleMapLoad = (data) => {
+    setMapLoaded(true);
+  }
+
+  const handleAOIFileUpload = (file) => {
+    const geoJSON = JSON.parse(file.data);
+    setAoiGeoJson(geoJSON);
+    setAoi(getCoodinatesFromGeoJSON(geoJSON));
+    setFileName(file.name);
+  }
 
   return (
-    <div>
-      <div className="flex">
+    <div className="hui-theme">
+      <div className="hui-flex">
         <div style={{ flex: 2 }}>
           <div className="top">
             <form>
               <input
-                className="border px-2 py-2 text-sm"
+                className="hui-input-text"
                 type="text"
                 placeholder="key (ex: building=yes)"
                 ref={tagsInputRef}
@@ -97,14 +125,14 @@ function App() {
               />
               &nbsp;
               <input
-                className="border px-2 py-2 text-sm"
+                className="hui-input-text"
                 type="text"
                 placeholder="hashtag (ex: hotosm-project)"
                 ref={hashtagInputRef}
               />
               &nbsp;
               <button
-                className="inline-flex items-center rounded bg-primary px-2 py-2 text-sm font-medium text-white"
+                className="hui-button"
                 onClick={handleFilterClick}
               >
                 Search
@@ -113,7 +141,7 @@ function App() {
             <select
               onChange={handleMapSourceSelect}
               ref={styleSelectRef}
-              className="border mt-2 bg-white px-2 py-2 text-sm"
+              className="hui-input-text hui-mt-2 hui-bg-white"
             >
               <option value="osm">OSM</option>
               <option value="bing">Bing</option>
@@ -128,16 +156,16 @@ function App() {
             center={coords}
             tags={tags}
             hashtag={hashtag}
-            highlightDataQualityIssues
             popupFeature={activeFeature}
             source={mapSource}
             config={config}
             realtime={realtimeMap}
             theme={demoTheme}
-            zoom={17}
-            onMove={handleMapMove}
-            onLoad={handleMapLoad}
+            zoom={6}
             featureType={featureType}
+            aoi={aoiGeoJson}
+            onMoveEnd={handleMapMove}
+            onLoad={handleMapLoad}
           />
         </div>
         <div
@@ -145,153 +173,148 @@ function App() {
             flex: 1,
             padding: 10,
             display: "flex",
-            "flex-direction": "column",
+            flexDirection: "column",
             backgroundColor: `rgb(${hottheme.colors.white})`,
           }}
         >
-          <div className="border-b-2 pb-5 space-y-3">
-            <UnderpassFeatureStats
-              tags={tags}
-              hashtag={hashtag}
-              apiUrl={config.API_URL}
-              featureType={featureType}
-            />
-            <UnderpassValidationStats
-              tags={tags}
-              hashtag={hashtag}
-              apiUrl={config.API_URL}
-              status="badgeom"
-              featureType={featureType}
-            />
-            <UnderpassValidationStats
-              tags={tags}
-              hashtag={hashtag}
-              apiUrl={config.API_URL}
-              status="badvalue"
-              featureType={featureType}
-            />
-          </div>
-          <div className="border-b-2 py-5 mb-4">
-            <form className="space-x-2">
-              <input
-                onChange={() => {
-                  setRealtimeList(!realtimeList);
-                }}
-                name="liveListCheckbox"
-                type="checkbox"
+            { !fileName ?
+              <>
+                <p className="fileUploadDropAreaTitle">Upload a GeoJson with the (Polygon) area you want to analyze:</p>
+                <div className="fileUploadDropArea">
+                  <AOIUpload classes={"fileUploadDropArea"} onFileLoad={handleAOIFileUpload} name="file"/>
+                </div>
+              </>
+              :
+              <div className="fileOptions">
+                <button onClick={handleResetFileClick} className="hui-text">x</button>
+                <h2 class="fileName">{fileName}</h2>
+              </div>
+            }
+            { mapLoaded ?
+            <><div>
+              <UnderpassFeatureStats
+                tags={tags}
+                hashtag={hashtag}
+                config={config}
+                featureType={featureType}
+                area={aoi || mapBbox} 
               />
-              <label target="liveListCheckbox">Live list</label>
-              <input
-                onChange={() => {
-                  setRealtimeMap(!realtimeMap);
+            </div>
+            <div className="demo-options">
+                <form className="hui-space-x-2">
+                  <input
+                    onChange={() => {
+                      setRealtimeList(!realtimeList);
+                    } }
+                    name="liveListCheckbox"
+                    type="checkbox" />
+                  <label target="liveListCheckbox">Live list</label>
+                  <input
+                    onChange={() => {
+                      setRealtimeMap(!realtimeMap);
+                    } }
+                    name="liveMapCheckbox"
+                    type="checkbox" />
+                  <label target="liveMapCheckbox">Live map</label>
+                </form>
+                {tags.startsWith("building") ?
+                  <form className="hui-space-x-2 hui-py-4">
+                    <input
+                      checked={status === statusList.ALL}
+                      onChange={() => {
+                        setStatus(statusList.ALL);
+                      } }
+                      name="allCheckbox"
+                      id="allCheckbox"
+                      type="radio" />
+                    <label htmlFor="allCheckbox">All</label>
+                    <input
+                      checked={status === statusList.UNSQUARED}
+                      onChange={() => {
+                        setStatus(statusList.UNSQUARED);
+                      } }
+                      name="geospatialCheckbox"
+                      id="geospatialCheckbox"
+                      type="radio" />
+                    <label htmlFor="geospatialCheckbox">Un-squared</label>
+                  </form>
+                  : <br />}
+                <form className="hui-space-x-2">
+                  <input
+                    checked={featureType === "all"}
+                    onChange={() => {
+                      setFeatureType("all");
+                    } }
+                    name="featureTypeAllCheckbox"
+                    id="featureTypeAllCheckbox"
+                    type="radio" />
+                  <label htmlFor="featureTypeAllCheckbox">All</label>
+                  <input
+                    checked={featureType === "polygons"}
+                    onChange={() => {
+                      setFeatureType("polygons");
+                    } }
+                    name="featureTypePolygonCheckbox"
+                    id="featureTypePolygonCheckbox"
+                    type="radio" />
+                  <label htmlFor="featureTypePolygonCheckbox">Polygon</label>
+                  <input
+                    checked={featureType === "lines"}
+                    onChange={() => {
+                      setFeatureType("lines");
+                    } }
+                    name="featureTypeLineCheckbox"
+                    id="featureTypeLineCheckbox"
+                    type="radio" />
+                  <label htmlFor="featureTypeLineCheckbox">Line</label>
+                  <input
+                    checked={featureType === "nodes"}
+                    onChange={() => {
+                      setFeatureType("nodes");
+                    } }
+                    name="featureTypeNodeCheckbox"
+                    id="featureTypeNodeCheckbox"
+                    type="radio" />
+                  <label htmlFor="featureTypeNodeCheckbox">Node</label>
+                  <input
+                    disabled
+                    checked={featureType === "relations"}
+                    onChange={() => {
+                      setFeatureType("relations");
+                    } }
+                    name="featureTypeRelationCheckbox"
+                    id="featureTypeRelationCheckbox"
+                    type="radio" />
+                  <label className="labelDisabled" disabled htmlFor="featureTypeRelationCheckbox">Relation</label>
+                </form>
+              </div>
+              <UnderpassFeatureList
+                style={{
+                  display: "flex",
+                  flexFlow: "column",
+                  flex: "1 1 auto",
                 }}
-                name="liveMapCheckbox"
-                type="checkbox"
-              />
-              <label target="liveMapCheckbox">Live map</label>
-            </form>
-            <form className="space-x-2 py-4">
-              <input
-                checked={status === statusList.ALL}
-                onChange={() => {
-                  setStatus(statusList.ALL);
-                }}
-                name="allCheckbox"
-                id="allCheckbox"
-                type="radio"
-              />
-              <label htmlFor="allCheckbox">All</label>
-              <input
-                checked={status === statusList.UNSQUARED}
-                onChange={() => {
-                  setStatus(statusList.UNSQUARED);
-                }}
-                name="geospatialCheckbox"
-                id="geospatialCheckbox"
-                type="radio"
-              />
-              <label htmlFor="geospatialCheckbox">Geospatial</label>
-              <input
-                checked={status === statusList.BADVALUE}
-                onChange={() => {
-                  setStatus(statusList.BADVALUE);
-                }}
-                name="semanticCheckbox"
-                id="semanticCheckbox"
-                type="radio"
-              />
-              <label htmlFor="semanticCheckbox">Semantic</label>
-            </form>
-            <form className="space-x-2">
-              <input
-                checked={featureType === "all"}
-                onChange={() => {
-                  setFeatureType("all");
-                }}
-                name="featureTypeAllCheckbox"
-                id="featureTypeAllCheckbox"
-                type="radio"
-              />
-              <label htmlFor="featureTypeAllCheckbox">All</label>
-              <input
-                checked={featureType === "polygon"}
-                onChange={() => {
-                  setFeatureType("polygon");
-                }}
-                name="featureTypePolygonCheckbox"
-                id="featureTypePolygonCheckbox"
-                type="radio"
-              />
-              <label htmlFor="featureTypePolygonCheckbox">Polygon</label>
-              <input
-                checked={featureType === "line"}
-                onChange={() => {
-                  setFeatureType("line");
-                }}
-                name="featureTypeLineCheckbox"
-                id="featureTypeLineCheckbox"
-                type="radio"
-              />
-              <label htmlFor="featureTypeLineCheckbox">Line</label>
-              <input
-                checked={featureType === "node"}
-                onChange={() => {
-                  setFeatureType("node");
-                }}
-                name="featureTypeNodeCheckbox"
-                id="featureTypeNodeCheckbox"
-                type="radio"
-              />
-              <label htmlFor="featureTypeNodeCheckbox">Node</label>
-            </form>
-          </div>
-          <UnderpassFeatureList
-            style={{
-              display: "flex",
-              "flex-flow": "column",
-              height: "1px",
-              flex: "1 1 auto",
-            }}
-            tags={tags}
-            hashtag={hashtag}
-            page={0}
-            onSelect={(feature) => {
-              setCoords([feature.lat, feature.lon]);
-              const tags = JSON.stringify(feature.tags);
-              const status = feature.status;
-              setActiveFeature({ properties: { tags, status }, ...feature });
-            }}
-            realtime={realtimeList}
-            config={config}
-            status={status}
-            // orderBy="created_at"
-            featureType={featureType}
-            onFetchFirstTime={(mostRecentFeature) => {
-              if (mostRecentFeature) {
-                setCoords([mostRecentFeature.lat, mostRecentFeature.lon]);
-              }
-            }}
-          />
+                area={aoi || mapBbox}
+                tags={tags}
+                hashtag={hashtag}
+                onSelect={(feature) => {
+                  setCoords([feature.lat, feature.lon]);
+                  const tags = JSON.stringify(feature.tags);
+                  const status = feature.status;
+                  setActiveFeature({ properties: { tags, status }, ...feature });
+                } }
+                realtime={realtimeList}
+                config={config}
+                status={status}
+                // orderBy="created_at"
+                featureType={featureType}
+                onFetchFirstTime={(mostRecentFeature) => {
+                  if (mostRecentFeature) {
+                    setCoords([mostRecentFeature.lat, mostRecentFeature.lon]);
+                  }
+                } } />
+              </>
+           : "Loading ..." }
         </div>
       </div>
     </div>
