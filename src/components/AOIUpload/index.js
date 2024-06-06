@@ -23,7 +23,7 @@ function AOIFileUpload({ onFileLoad, onError}) {
         onError();
       }
     }
-  }, [file]);
+  }, [file, onError, onFileLoad]);
 
   return (
     <FileUploader classes={"fileUploadDropArea"} handleChange={handleChange} name="file" types={fileTypes} />

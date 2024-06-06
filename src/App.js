@@ -37,7 +37,7 @@ function App() {
   const [mapBbox, setMapBbox] = useState(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [aoiGeoJson, setAoiGeoJson] = useState(AOI_GEOJSON);
-  const [aoi, setAoi] = useState(null);
+  const [aoi, setAoi] = useState(getCoodinatesFromGeoJSON(AOI_GEOJSON));
   const [fileName, setFileName] = useState(null);
   const tagsInputRef = useRef("");
   const hashtagInputRef = useRef("");
@@ -51,7 +51,7 @@ function App() {
     } else {
       document.body.style.backgroundColor = `rgb(${hottheme.colors.white})`;
     }
-  }, [mapSource]);
+  }, [hottheme.colors.dark, hottheme.colors.white, mapSource]);
 
   useEffect(() => {
     if (!tags.startsWith("building")) {
@@ -74,9 +74,9 @@ function App() {
     },
   };
 
-  const [demoTheme, setDemoTheme] = useState({
+  const demoTheme = {
     map: defaultMapStyle,
-  });
+  };
 
   const handleFilterClick = (e) => {
     e.preventDefault();
@@ -96,7 +96,7 @@ function App() {
   };
 
   const handleMapMove = (data) => {
-    setMapBbox(data.bbox);
+    !aoi && setMapBbox(data.bbox);
   }
 
   const handleMapLoad = (data) => {
@@ -146,9 +146,6 @@ function App() {
               <option value="osm">OSM</option>
               <option value="bing">Bing</option>
               <option value="esri">ESRI</option>
-              <option value="mapbox">Mapbox</option>
-              <option value="white">Blank</option>
-              <option value="dark">Blank (dark)</option>
               <option value="oam">OAM</option>
             </select>
           </div>
@@ -306,7 +303,7 @@ function App() {
                 realtime={realtimeList}
                 config={config}
                 status={status}
-                // orderBy="created_at"
+                orderBy="closedAt"
                 featureType={featureType}
                 onFetchFirstTime={(mostRecentFeature) => {
                   if (mostRecentFeature) {
